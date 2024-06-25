@@ -1,5 +1,6 @@
 import time
 import streamlit as st
+from random import randint
 # from code_editor import code_editor
 from vanna_calls import (
     generate_questions_cached,
@@ -14,7 +15,7 @@ from vanna_calls import (
 )
 from hackthon_faiss_embedding import *
 from hackthon_vanna_rag import *
-
+from hackthon_langchain_retriever import *
 import certifi
 certifi.where()
 
@@ -33,12 +34,17 @@ st.sidebar.checkbox("Show SQL", value=True, key="show_sql")
 st.sidebar.checkbox("Show Table", value=True, key="show_table")
 st.sidebar.checkbox("Show Plotly Code", value=True, key="show_plotly_code")
 st.sidebar.checkbox("Show Chart", value=True, key="show_chart")
-st.sidebar.checkbox("Show Summary", value=True, key="show_summary")
-st.sidebar.checkbox("Show Follow-up Questions", value=True, key="show_followup")
+# st.sidebar.checkbox("Show Summary", value=True, key="show_summary")
+# st.sidebar.checkbox("Show Follow-up Questions", value=True, key="show_followup")
+st.sidebar.checkbox("GPT Integration", value=True, key="gpt_integration")
+st.sidebar.checkbox("RAG Integration", value=True, key="rag_integration")
 st.sidebar.button("Reset", on_click=lambda: set_question(None), use_container_width=True)
 
 st.title("Vanna AI")
 # st.sidebar.write(st.session_state)
+
+
+st.session_state["user_input_cursor"] = 1
 
 
 def set_question(question):
@@ -61,9 +67,10 @@ if assistant_message_suggested.button("Click to show suggested questions"):
 
 my_question = st.session_state.get("my_question", default=None)
 
-if my_question is None:
+if my_question is None and st.session_state["user_input_cursor"] == 1:
     my_question = st.chat_input(
         "Ask me a question to create your dataframe.",
+        key=1
     )
 
 
@@ -93,16 +100,11 @@ if my_question:
         if df is not None:
             st.session_state["df"] = df
 
-            # print("0")
-            # json_list = rows_to_structural_json(df)
-            # print("1")
-            # create_faiss_embeddings(json_list)
-            # print("2")
-            # gpt_anwer = get_answer_from_faiss_gpt(my_question, openai_api_key=openai_api_key)
-            # print("3")
-            # assistant_message.write(gpt_anwer)
-            # print("4")
-            
+            #################### Hackthon ####################
+
+            # st.session_state["user_input_cursor"] = 2
+
+            #################### Hackthon ####################
 
         if st.session_state.get("df") is not None:
             if st.session_state.get("show_table", True):
@@ -114,6 +116,7 @@ if my_question:
                 if len(df) > 10:
                     assistant_message_table.text("First 10 rows of data")
                     assistant_message_table.dataframe(df.head(10))
+                    st.session_state["user_input_cursor"] = 2
                 else:
                     assistant_message_table.dataframe(df)
 
@@ -142,65 +145,133 @@ if my_question:
                         else:
                             assistant_message_chart.error("I couldn't generate a chart")
 
-            if st.session_state.get("show_summary", True):
-                assistant_message_summary = st.chat_message(
+            # if st.session_state.get("show_summary", False):
+            #     assistant_message_summary = st.chat_message(
+            #         "assistant",
+            #         avatar=avatar_url,
+            #     )
+            #     summary = generate_summary_cached(question=my_question, df=df)
+                
+            #     if summary is not None:
+            #         assistant_message_summary.text(summary)
+
+
+                #################### hackthon_vanna_rag ####################
+
+            # Add GPT integration session
+            if st.session_state.get("gpt_integration", True):
+                assistant_message_gpt = st.chat_message(
                     "assistant",
                     avatar=avatar_url,
                 )
-                summary = generate_summary_cached(question=my_question, df=df)
+
+                # st.session_state["gpt_question"] = None
+                gpt_question = st.session_state.get("gpt_question", default=None)
+                input_key=2
                 
-                ##### hackthon_vanna_rag #####
+                if gpt_question is None and st.session_state["user_input_cursor"] == 2:
+                    print('A')
+                    gpt_question = st.chat_input(
+                        "Ask a question about your generated data",
+                        key=input_key
+                        )
+                    st.session_state["gpt_question"] = gpt_question
+                    print('B')
+                    print(gpt_question)
+                if gpt_question:
+                    gpt_answer = get_gpt_response(df=df, user_prompt=gpt_question)
+                    input_key+=1
+                    gpt_question=None
+                    assistant_message_gpt.text(gpt_answer)
+                    gpt_answer=None
 
-                # summary = get_gpt_response(df=df, user_prompt=my_question)
-
-                if summary is not None:
-                    assistant_message_summary.text(summary)
-
-                # TODO:
-                st.sidebar.button('Generate Vector Database', use_container_width=True)
-
-                st.session_state["followup_question"] = None
-                followup_question = st.session_state.get("followup_question", default=None)
-
-                exit_loop = False
-                while not exit_loop == 1:
-                    if followup_question is None:
-                        my_second_question = st.chat_input(
-                            "Ask me a question about your data",
-                            )
-                        followup_answer = get_gpt_response(df=df, user_prompt=my_question)
-                    
-                    exit_button = st.button("Exit Loop")
-                    if exit_button:
-                        exit_loop = True
-
-                    if summary is not None:
-                        assistant_message_summary.text(followup_answer)
-                        
-                
-                
-                st.sidebar.button("Reset", on_click=lambda: set_question(None), use_container_width=True)
+                if st.sidebar.button('Generate Vector Database', use_container_width=True):
+                    json_rows = df_to_structural_json(df)
+                    create_faiss_embeddings(json_rows)
+                    st.write('Vector database created.')
+                    st.session_state["user_input_cursor"] = 3
 
 
-                ##### hackthon_vanna_rag #####
+            # # Add RAG integration session
+            # if st.session_state.get("rag_integration", True):
+            #     assistant_message_rag = st.chat_message(
+            #         "assistant",
+            #         avatar=avatar_url,
+            #     )
 
-            if st.session_state.get("show_followup", True):
-                assistant_message_followup = st.chat_message(
+            #     st.session_state["rag_question"] = None
+            #     rag_question = st.session_state.get("rag_question", default=None)
+            #     input_key=3
+            #     print("00000")
+            #     if rag_question is None and st.session_state["user_input_cursor"] == 3:
+            #         print("00001")
+            #         rag_question = st.chat_input(
+            #             "Ask a question to you RAG model",
+            #             key=input_key
+            #             )
+            #         print(rag_question)
+            #         st.session_state["rag_question"] = rag_question
+            #         print("00002")
+            #         rag_question = 'Summarize the data'
+            #     print("00003")
+            #     print(rag_question)
+
+            #     if rag_question:
+            #         print("00004")
+            #         rag_result = get_answer_from_faiss_gpt(rag_question)
+            #         print("00005")
+            #         assistant_message_rag.text(rag_result)
+
+            # Add RAG integration session 
+            if st.session_state.get("rag_integration", True):
+                assistant_message_rag = st.chat_message(
                     "assistant",
                     avatar=avatar_url,
                 )
-                followup_questions = generate_followup_cached(
-                    question=my_question, sql=sql, df=df
-                )
-                st.session_state["df"] = None
 
-                if len(followup_questions) > 0:
-                    assistant_message_followup.text(
-                        "Here are some possible follow-up questions"
-                    )
-                    # Print the first 5 follow-up questions
-                    for question in followup_questions[:5]:
-                        assistant_message_followup.button(question, on_click=set_question, args=(question,))
+                # st.session_state["rag_question"] = None
+                rag_question = st.session_state.get("rag_question", default=None)
+                input_key=3
+                print('D')
+                if rag_question is None and st.session_state["user_input_cursor"] == 3:
+                    rag_question = st.chat_input(
+                        "Ask a question about your RAG data",
+                        key=input_key
+                        )
+                    print(rag_question)
+                    st.session_state["rag_question"] = rag_question
+                print('E')
+                print(rag_question)
+                if rag_question:
+                    rag_answer = get_answer_from_faiss_gpt(rag_question)
+                    input_key+=1
+                    rag_question=None
+                    assistant_message_rag.text(rag_answer)
+                    rag_answer=None
+
+
+
+
+                #################### hackthon_vanna_rag ####################
+
+
+            # if st.session_state.get("show_followup", False):
+            #     assistant_message_followup = st.chat_message(
+            #         "assistant",
+            #         avatar=avatar_url,
+            #     )
+            #     followup_questions = generate_followup_cached(
+            #         question=my_question, sql=sql, df=df
+            #     )
+            #     st.session_state["df"] = None
+
+            #     if len(followup_questions) > 0:
+            #         assistant_message_followup.text(
+            #             "Here are some possible follow-up questions"
+            #         )
+            #         # Print the first 5 follow-up questions
+            #         for question in followup_questions[:5]:
+            #             assistant_message_followup.button(question, on_click=set_question, args=(question,))
 
     else:
         assistant_message_error = st.chat_message(

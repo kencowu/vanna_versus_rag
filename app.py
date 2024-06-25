@@ -13,16 +13,15 @@ from vanna_calls import (
     generate_summary_cached
 )
 from hackthon_faiss_embedding import *
-from vanna_versus_rag.hackthon_langchain_retriever import *
+from hackthon_vanna_rag import *
 
+import certifi
+certifi.where()
 
 from dotenv import load_dotenv
-
-# Load environment variables from .env file
 load_dotenv()
 
-# Get the OpenAI API key from the environment variables
-openai_api_key = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("API_KEY")
 
 avatar_url = "https://vanna.ai/img/vanna.svg"
 
@@ -64,7 +63,7 @@ my_question = st.session_state.get("my_question", default=None)
 
 if my_question is None:
     my_question = st.chat_input(
-        "Ask me a question about your data",
+        "Ask me a question to create your dataframe.",
     )
 
 
@@ -150,13 +149,40 @@ if my_question:
                 )
                 summary = generate_summary_cached(question=my_question, df=df)
                 
-                ##### Hackthon #####
-                from vanna_versus_rag.hackthon_vanna_rag import get_gpt_response
-                summary = get_gpt_response(df=df, user_prompt=my_question)
-                ##### Hackthon #####
+                ##### hackthon_vanna_rag #####
+
+                # summary = get_gpt_response(df=df, user_prompt=my_question)
 
                 if summary is not None:
                     assistant_message_summary.text(summary)
+
+                # TODO:
+                st.sidebar.button('Generate Vector Database', use_container_width=True)
+
+                st.session_state["followup_question"] = None
+                followup_question = st.session_state.get("followup_question", default=None)
+
+                exit_loop = False
+                while not exit_loop == 1:
+                    if followup_question is None:
+                        my_second_question = st.chat_input(
+                            "Ask me a question about your data",
+                            )
+                        followup_answer = get_gpt_response(df=df, user_prompt=my_question)
+                    
+                    exit_button = st.button("Exit Loop")
+                    if exit_button:
+                        exit_loop = True
+
+                    if summary is not None:
+                        assistant_message_summary.text(followup_answer)
+                        
+                
+                
+                st.sidebar.button("Reset", on_click=lambda: set_question(None), use_container_width=True)
+
+
+                ##### hackthon_vanna_rag #####
 
             if st.session_state.get("show_followup", True):
                 assistant_message_followup = st.chat_message(

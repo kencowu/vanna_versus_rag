@@ -43,8 +43,8 @@ st.sidebar.button("Reset", on_click=lambda: set_question(None), use_container_wi
 st.title("Vanna AI")
 # st.sidebar.write(st.session_state)
 
-
-st.session_state["user_input_cursor"] = 1
+if "user_input_cursor" not in st.session_state:
+    st.session_state["user_input_cursor"] = "init"
 
 
 def set_question(question):
@@ -67,10 +67,10 @@ if assistant_message_suggested.button("Click to show suggested questions"):
 
 my_question = st.session_state.get("my_question", default=None)
 
-if my_question is None and st.session_state["user_input_cursor"] == 1:
+if my_question is None and st.session_state["user_input_cursor"] == "init":
     my_question = st.chat_input(
         "Ask me a question to create your dataframe.",
-        key=1
+        key="1"
     )
 
 
@@ -100,12 +100,6 @@ if my_question:
         if df is not None:
             st.session_state["df"] = df
 
-            #################### Hackthon ####################
-
-            # st.session_state["user_input_cursor"] = 2
-
-            #################### Hackthon ####################
-
         if st.session_state.get("df") is not None:
             if st.session_state.get("show_table", True):
                 df = st.session_state.get("df")
@@ -116,7 +110,11 @@ if my_question:
                 if len(df) > 10:
                     assistant_message_table.text("First 10 rows of data")
                     assistant_message_table.dataframe(df.head(10))
-                    st.session_state["user_input_cursor"] = 2
+            #################### Hackthon ####################
+                    if st.session_state["user_input_cursor"] == "init":
+                        st.session_state["user_input_cursor"] = "gpt"
+            #################### Hackthon ####################
+
                 else:
                     assistant_message_table.dataframe(df)
 
@@ -167,29 +165,25 @@ if my_question:
 
                 # st.session_state["gpt_question"] = None
                 gpt_question = st.session_state.get("gpt_question", default=None)
-                input_key=2
-                
-                if gpt_question is None and st.session_state["user_input_cursor"] == 2:
-                    print('A')
+                if gpt_question is None and st.session_state["user_input_cursor"] == "gpt":
                     gpt_question = st.chat_input(
                         "Ask a question about your generated data",
-                        key=input_key
+                        key="2"
                         )
                     st.session_state["gpt_question"] = gpt_question
-                    print('B')
-                    print(gpt_question)
-                if gpt_question:
+                if "gpt_question" in st.session_state and st.session_state["gpt_question"] is not None:
+                    gpt_question = st.session_state["gpt_question"]
                     gpt_answer = get_gpt_response(df=df, user_prompt=gpt_question)
-                    input_key+=1
-                    gpt_question=None
                     assistant_message_gpt.text(gpt_answer)
-                    gpt_answer=None
+                    st.session_state["gpt_question"] = None
+                    st.session_state["gpt_answer"] = None
 
                 if st.sidebar.button('Generate Vector Database', use_container_width=True):
                     json_rows = df_to_structural_json(df)
                     create_faiss_embeddings(json_rows)
                     st.write('Vector database created.')
-                    st.session_state["user_input_cursor"] = 3
+                    if st.session_state["user_input_cursor"] == "gpt":
+                        st.session_state["user_input_cursor"] = "rag"
 
 
             # # Add RAG integration session
@@ -231,23 +225,20 @@ if my_question:
 
                 # st.session_state["rag_question"] = None
                 rag_question = st.session_state.get("rag_question", default=None)
-                input_key=3
-                print('D')
-                if rag_question is None and st.session_state["user_input_cursor"] == 3:
+                if rag_question is None and st.session_state["user_input_cursor"] == "rag":
                     rag_question = st.chat_input(
                         "Ask a question about your RAG data",
-                        key=input_key
+                        key="3"
                         )
                     print(rag_question)
                     st.session_state["rag_question"] = rag_question
-                print('E')
-                print(rag_question)
-                if rag_question:
+
+                if "rag_question" in st.session_state and st.session_state["gpt_question"] is not None:
+                    rag_question = st.session_state["rag_question"]
                     rag_answer = get_answer_from_faiss_gpt(rag_question)
-                    input_key+=1
-                    rag_question=None
                     assistant_message_rag.text(rag_answer)
-                    rag_answer=None
+                    st.session_state["rag_question"] = None
+                    st.session_state["rag_answer"] = None
 
 
 
